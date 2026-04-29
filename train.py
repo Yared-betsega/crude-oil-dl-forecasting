@@ -1,12 +1,13 @@
 import os
 import json
+import argparse
 import torch
 import pickle
 from datetime import datetime
 
 from model.input_fn   import get_data_loaders, TARGET_COL
 from model.model_fn   import build_model, MODEL_REGISTRY
-from model.training   import train_step
+from model.training   import train_step, LOSS_CHOICES
 from model.evaluation import full_eval, print_metrics
 
 MODELS_DIR = "saved_models"
@@ -18,6 +19,11 @@ CSV_PATH = "wti_crude_daily.csv"
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Full training run")
+    parser.add_argument("--loss", default="mse", choices=LOSS_CHOICES,
+                        help="Training loss function (default: mse)")
+    args = parser.parse_args()
+
     data = get_data_loaders(CSV_PATH)
 
     scaler       = data["scaler"]
@@ -25,6 +31,8 @@ def main():
     X_test_t     = data["X_test"]
     y_test_t     = data["y_test"]
     X_test_raw   = data["X_test_raw"]
+
+    print(f"Loss function: {args.loss.upper()}")
 
     all_logs = {}
     results  = {}
@@ -34,13 +42,13 @@ def main():
         print(f"  Training {name}")
         print("=" * 45)
         model   = build_model(name)
-        history = train_step(model, train_loader)
+        history = train_step(model, train_loader, loss=args.loss)
         metrics = full_eval(model, X_test_t, y_test_t, X_test_raw, scaler, TARGET_COL)
         metrics["model"] = model
         results[name]    = metrics
         all_logs[name]   = history
 
-        print(f"  MAE={metrics['mae']:.4f}  Dir={metrics['dir_acc']*100:.1f}%  "
+        print(f"  MSE={metrics['mse']:.4f}  Dir={metrics['dir_acc']*100:.1f}%  "
               f"Sharpe={metrics['sharpe']:.3f}")
 
         save_path = os.path.join(MODELS_DIR, f"{name.lower()}_model.pt")
@@ -65,13 +73,14 @@ def main():
         f.write(f"Training run: {timestamp}\n")
         f.write("=" * 60 + "\n\n")
         for name, history in all_logs.items():
+            log_key = f"train_{args.loss.lower()}"
             f.write(f"Model: {name}\n")
-            f.write(f"{'Epoch':>6}  {'Train MAE':>12}\n")
+            f.write(f"{'Epoch':>6}  {f'Train {args.loss.upper()}':>12}\n")
             f.write("-" * 22 + "\n")
             for entry in history:
-                f.write(f"{entry['epoch']:>6}  {entry['train_mae']:>12.6f}\n")
+                f.write(f"{entry['epoch']:>6}  {entry[log_key]:>12.6f}\n")
             r = results[name]
-            f.write(f"\n  Test MAE    : {r['mae']:.4f}\n")
+            f.write(f"\n  Test MSE    : {r['mse']:.4f}\n")
             f.write(f"  Dir Acc (%) : {r['dir_acc']*100:.1f}%\n")
             f.write(f"  Sharpe      : {r['sharpe']:.3f}\n\n")
     print(f"Summary saved      → {summary_path}")

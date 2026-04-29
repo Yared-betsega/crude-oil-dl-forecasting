@@ -1,12 +1,13 @@
 import os
 import json
+import argparse
 import itertools
 
 import torch
 
 from model.input_fn  import get_data_loaders, TARGET_COL, LOOK_BACK
 from model.model_fn  import build_model
-from model.training  import train_step
+from model.training  import train_step, LOSS_CHOICES
 from model.evaluation import full_eval
 
 CSV_PATH     = "wti_crude_daily.csv"
@@ -20,7 +21,7 @@ PARAM_GRID = {
 }
 
 
-def grid_search():
+def grid_search(loss: str = "mse"):
     data = get_data_loaders(CSV_PATH)
     scaler      = data["scaler"]
     X_test_t    = data["X_test"]
@@ -31,6 +32,7 @@ def grid_search():
     keys   = list(PARAM_GRID.keys())
     combos = list(itertools.product(*[PARAM_GRID[k] for k in keys]))
 
+    loss_key    = f"test_{loss.lower()}"
     all_results = []
     best_sharpe = -float("inf")
     best_params = None
@@ -41,15 +43,16 @@ def grid_search():
 
         model = build_model(params["model_name"])
         train_step(model, train_loader,
-                   epochs=params["epochs"], lr=params["lr"], verbose=False)
+                   epochs=params["epochs"], lr=params["lr"],
+                   loss=loss, verbose=False)
 
         metrics = full_eval(model, X_test_t, y_test_t, X_test_raw, scaler, TARGET_COL)
         row = {**params,
-               "mae":     round(metrics["mae"],     4),
+               loss_key:  round(metrics["mse"],      4),
                "dir_acc": round(metrics["dir_acc"],  4),
                "sharpe":  round(metrics["sharpe"],   4)}
         all_results.append(row)
-        print(f"  MAE={row['mae']}  Dir={row['dir_acc']*100:.1f}%  Sharpe={row['sharpe']}")
+        print(f"  {loss.upper()}={row[loss_key]}  Dir={row['dir_acc']*100:.1f}%  Sharpe={row['sharpe']}")
 
         if row["sharpe"] > best_sharpe:
             best_sharpe = row["sharpe"]
@@ -65,4 +68,8 @@ def grid_search():
 
 
 if __name__ == "__main__":
-    grid_search()
+    parser = argparse.ArgumentParser(description="Hyperparameter grid search")
+    parser.add_argument("--loss", default="mse", choices=LOSS_CHOICES,
+                        help="Training loss function (default: mse)")
+    args = parser.parse_args()
+    grid_search(loss=args.loss)

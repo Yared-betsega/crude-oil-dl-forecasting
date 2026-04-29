@@ -18,8 +18,8 @@ experiments/
 model/
     input_fn.py     data loading, scaling, sequence building
     model_fn.py     VanillaRNN, LSTMModel, GRUModel, TransformerForecaster
-    training.py     train_step, DirectionalMAELoss (logs every 5 epochs)
-    evaluation.py   MAE, directional accuracy, Sharpe ratio
+    training.py     train_step, DirectionalMSELoss (logs every 5 epochs)
+    evaluation.py   MSE, directional accuracy, Sharpe ratio
     utils.py        helper functions
 saved_models/       .pt weights + scaler.pkl (written by train.py)
 build_dataset.py    fetch & split dataset from Yahoo Finance
@@ -43,10 +43,9 @@ source venv/bin/activate          # Windows: venv\Scripts\activate
 pip install torch scikit-learn pandas numpy matplotlib statsmodels yfinance
 ```
 
-### 2 — (Optional) Re-download the dataset
+### 2 — Download the dataset
 
-The full dataset is already included as `wti_crude_daily.csv`.  
-To refresh it from Yahoo Finance:
+The full dataset will be downloaded as `wti_crude_daily.csv`.  
 
 ```bash
 python build_dataset.py
@@ -70,10 +69,12 @@ Options:
 |---|---|
 | `--retrain` | Force fresh training even if weights exist |
 | `--sample`  | Use the 100-row sample CSV instead of the full dataset |
+| `--loss`    | Training loss function: `mse` (default) or `mae` |
 
 ```bash
-python run_demo.py --retrain          # re-train everything
-python run_demo.py --sample           # quick smoke-test on sample data
+python run_demo.py --retrain                  # re-train everything
+python run_demo.py --sample                   # quick smoke-test on sample data
+python run_demo.py --retrain --loss mae       # re-train with MAE loss
 ```
 
 ### 4 — Full training run (saves logs)
@@ -83,9 +84,16 @@ python train.py
 ```
 
 - Trains RNN, LSTM, GRU, Transformer for 50 epochs each.  
-- Logs MAE every **5 epochs** to the terminal.  
+- Logs the training loss every **5 epochs** to the terminal.  
 - Saves `experiments/training_logs/training_log_<timestamp>.json` and a human-readable `summary_<timestamp>.txt`.  
 - Saves model weights to `saved_models/`.
+
+Use `--loss` to switch the training loss function:
+
+```bash
+python train.py               # MSE (default)
+python train.py --loss mae    # MAE
+```
 
 ### 5 — Evaluate saved models
 
@@ -96,7 +104,8 @@ python evaluate.py
 ### 6 — Hyperparameter search
 
 ```bash
-python search_hyperparams.py
+python search_hyperparams.py                 # MSE (default)
+python search_hyperparams.py --loss mae      # run search with MAE loss
 ```
 
 Results are written to `experiments/hyperparam_search/search_results.json`.
@@ -121,7 +130,7 @@ python synthesize_results.py
 
 **Training config (all DL models):**  
 - Optimiser: Adam (`lr=1e-3`)  
-- Loss: MAE (`nn.L1Loss`)  
+- Loss: MSE (`nn.MSELoss`) — configurable via `--loss {mse,mae}`  
 - Epochs: 50 | Batch size: 64 | Dropout: 0.2  
 - Input: 60-day sliding window of [Open, High, Low, Close, Volume] scaled with `StandardScaler`  
 - Target: next-day Close (scaled)
@@ -130,7 +139,7 @@ python synthesize_results.py
 
 ## Results
 
-| Model | MAE (scaled) | Directional Acc. | Sharpe (ann.) |
+| Model | MSE (scaled) | Directional Acc. | Sharpe (ann.) |
 |---|---|---|---|
 | RNN | 0.1048 | 52.1% | 0.792 |
 | LSTM | 0.0760 | 53.4% | **0.991** |
@@ -138,9 +147,11 @@ python synthesize_results.py
 | Transformer | 0.0754 | **55.4%** | 0.927 |
 | ARIMA(5,1,0) | **0.0690** | 52.6% | 0.269 |
 
-- **MAE:** ARIMA achieves the lowest level-prediction error; GRU is the best deep-learning model on this metric.  
+> These values are from the previous MAE-trained run. Re-run `python train.py` to update with MSE-trained results.
+
+- **MSE:** penalises large prediction errors more heavily than MAE.  
 - **Directional accuracy:** all models sit just above the 50% random baseline; the Transformer edges ahead at 55.4%.  
-- **Sharpe ratio:** LSTM (0.991) and Transformer (0.927) both approach the 1.0 threshold considered attractive in systematic strategies. GRU's negative Sharpe (−0.130) shows that low MAE does not imply profitable directional calls.
+- **Sharpe ratio:** LSTM (0.991) and Transformer (0.927) both approach the 1.0 threshold considered attractive in systematic strategies. GRU's negative Sharpe (−0.130) shows that low prediction error does not imply profitable directional calls.
 
 ---
 
@@ -156,8 +167,9 @@ python synthesize_results.py
 | **BatchNorm1d** on final hidden state | Stabilises RNN/LSTM/GRU training |
 | **Dropout (0.2)** | Applied in all recurrent layers and the Transformer encoder |
 | **Adam optimiser** | Adaptive learning-rate optimisation |
-| **MAE loss** | Robust to outliers; directly matches the evaluation metric |
-| **Directional penalty loss** | Custom `DirectionalMAELoss`: multiplies wrong-direction errors by `(1 + α)` |
+| **MSE loss** | Penalises large errors more heavily than MAE; default training objective (`--loss mse`) |
+| **MAE loss** | Robust to outliers; selectable via `--loss mae` |
+| **Directional penalty loss** | Custom `DirectionalMSELoss`: multiplies wrong-direction squared errors by `(1 + α)` |
 | **Walk-forward ARIMA** | Classical linear baseline; refitted at every test step to avoid look-ahead bias |
 | **Directional accuracy** | % of days where predicted direction matches actual (random = 50%) |
 | **Annualised Sharpe ratio** | Risk-adjusted return of a long/short strategy driven by model direction calls |
@@ -192,10 +204,10 @@ All figures are pre-generated PDFs in `report/figures/`.
 
 
 
-1. All models learn a **persistence-like strategy** under plain MAE loss — the near-random-walk nature of crude oil futures means "predict ≈ yesterday's price" already minimises average error.  
+1. All models learn a **persistence-like strategy** under plain MSE loss — the near-random-walk nature of crude oil futures means "predict ≈ yesterday's price" already minimises average error.  
 2. The **Transformer's global attention** gives it a small but consistent directional edge (55.4%) over recurrent architectures.  
 3. The **directional penalty loss** (`α=10`) successfully shifts models away from pure persistence toward directional correctness.  
-4. The gap between MAE rankings (GRU best) and Sharpe rankings (LSTM best) confirms that financial forecasting requires **multiple evaluation metrics**.
+4. The gap between MSE rankings and Sharpe rankings confirms that financial forecasting requires **multiple evaluation metrics**.
 
 ---
 

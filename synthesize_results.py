@@ -36,7 +36,7 @@ def synthesize():
         print("Run train.py or search_hyperparams.py first.")
         return
 
-    metric_cols = [c for c in ["mae", "dir_acc", "sharpe"] if c in df.columns]
+    metric_cols = [c for c in ["test_mse", "test_mae", "mae", "dir_acc", "sharpe"] if c in df.columns]
     print("\n=== All Experiment Results ===")
     print(df.to_string(index=False))
 

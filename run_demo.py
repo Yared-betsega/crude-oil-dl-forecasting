@@ -9,7 +9,7 @@ Usage:
 What this script does:
   1. Loads (or trains) all four deep-learning models: RNN, LSTM, GRU, Transformer.
   2. Runs an ARIMA(5,1,0) walk-forward baseline.
-  3. Reports MAE, Directional Accuracy, and Annualised Sharpe Ratio for every model.
+  3. Reports MSE, Directional Accuracy, and Annualised Sharpe Ratio for every model.
   4. Saves a comparison bar-chart to demo_results.png.
 """
 
@@ -24,12 +24,12 @@ import torch
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from sklearn.metrics import mean_absolute_error
+from sklearn.metrics import mean_squared_error
 from statsmodels.tsa.arima.model import ARIMA
 
 from model.input_fn   import get_data_loaders, TARGET_COL, LOOK_BACK
 from model.model_fn   import build_model, MODEL_REGISTRY
-from model.training   import train_step
+from model.training   import train_step, LOSS_CHOICES
 from model.evaluation import full_eval, print_metrics
 from model.utils      import directional_accuracy, sharpe_ratio
 
@@ -40,7 +40,7 @@ FULL_CSV   = "wti_crude_daily.csv"
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
-def load_or_train(data: dict, retrain: bool) -> dict:
+def load_or_train(data: dict, retrain: bool, loss: str = "mse") -> dict:
     """Return dict of {name: nn.Module}, loading from disk or training fresh."""
     models = {}
     scaler       = data["scaler"]
@@ -57,7 +57,7 @@ def load_or_train(data: dict, retrain: bool) -> dict:
             print(f"  Loaded  {name:12s} ← {path}")
         else:
             print(f"\n  Training {name} …")
-            train_step(model, train_loader, verbose=True)
+            train_step(model, train_loader, loss=loss, verbose=True)
             os.makedirs(MODELS_DIR, exist_ok=True)
             torch.save(model.state_dict(), path)
             print(f"  Saved   {name:12s} → {path}")
@@ -83,15 +83,15 @@ def run_arima(data: dict) -> dict:
         history.append(test_series[t])
     preds = np.array(preds, dtype=np.float32)
 
-    mae = mean_absolute_error(test_series, preds)
+    mse = mean_squared_error(test_series, preds)
     da  = directional_accuracy(preds, test_series, prev_arima)
     sr  = sharpe_ratio(preds, prev_arima, test_series, scaler)
-    return {"mae": mae, "dir_acc": da, "sharpe": sr, "preds": preds}
+    return {"mse": mse, "dir_acc": da, "sharpe": sr, "preds": preds}
 
 
 def save_chart(results: dict):
     model_names = list(results.keys())
-    mae_vals    = [results[n]["mae"]      for n in model_names]
+    mse_vals    = [results[n]["mse"]      for n in model_names]
     da_vals     = [results[n]["dir_acc"] * 100 for n in model_names]
     sr_vals     = [results[n]["sharpe"]   for n in model_names]
     colors      = ["tab:blue", "tab:orange", "tab:green", "tab:red", "tab:purple"][:len(model_names)]
@@ -100,9 +100,9 @@ def save_chart(results: dict):
 
     for ax, vals, title, ylabel in zip(
         axes,
-        [mae_vals, da_vals, sr_vals],
-        ["MAE (lower is better)", "Dir. Accuracy % (higher is better)", "Sharpe (higher is better)"],
-        ["MAE (scaled Close)", "Directional Accuracy (%)", "Annualised Sharpe Ratio"],
+        [mse_vals, da_vals, sr_vals],
+        ["MSE (lower is better)", "Dir. Accuracy % (higher is better)", "Sharpe (higher is better)"],
+        ["MSE (scaled Close)", "Directional Accuracy (%)", "Annualised Sharpe Ratio"],
     ):
         bars = ax.bar(model_names, vals, color=colors, alpha=0.85, edgecolor="black")
         for bar, v in zip(bars, vals):
@@ -130,6 +130,8 @@ def main():
                         help="Force retraining even if saved models exist")
     parser.add_argument("--sample",  action="store_true",
                         help="Use the 100-row sample dataset instead of the full CSV")
+    parser.add_argument("--loss", default="mse", choices=LOSS_CHOICES,
+                        help="Training loss function (default: mse)")
     args = parser.parse_args()
 
     csv_path = SAMPLE_CSV if args.sample else FULL_CSV
@@ -148,7 +150,7 @@ def main():
     data = get_data_loaders(csv_path)
 
     print("\n── Deep-learning models ─────────────────────────────────────────")
-    models  = load_or_train(data, retrain=args.retrain)
+    models  = load_or_train(data, retrain=args.retrain, loss=args.loss)
 
     results = {}
     for name, model in models.items():

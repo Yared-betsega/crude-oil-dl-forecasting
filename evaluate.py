@@ -54,13 +54,13 @@ def arima_eval(data: dict) -> dict:
 
     arima_preds = np.array(arima_preds, dtype=np.float32)
 
-    from sklearn.metrics import mean_absolute_error
+    from sklearn.metrics import mean_squared_error
     from model.utils import directional_accuracy, sharpe_ratio
 
-    mae = mean_absolute_error(test_series, arima_preds)
+    mse = mean_squared_error(test_series, arima_preds)
     da  = directional_accuracy(arima_preds, test_series, prev_arima)
     sr  = sharpe_ratio(arima_preds, prev_arima, test_series, scaler)
-    return {"mae": mae, "dir_acc": da, "sharpe": sr, "preds": arima_preds}
+    return {"mse": mse, "dir_acc": da, "sharpe": sr, "preds": arima_preds}
 
 
 def main():
