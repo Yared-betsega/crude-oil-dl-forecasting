@@ -9,26 +9,30 @@
 
 ```
 data/
-    train/          train split CSV (written by build_dataset.py)
-    dev/            dev split CSV
-    test/
-        sample_test_data.csv    last 100 rows of the full dataset
+    train/              train split CSV (written by build_dataset.py)
+    dev/                dev split CSV
+    test/               test split CSV
 experiments/
-    training_logs/  JSON + TXT logs written by train.py
+    hyperparam_search/  grid search results JSON + comparison plot
+    lookback_search/    look-back window experiment results JSON + plot
+    loss_fn_search/     MAE vs MSE experiment results JSON
+    training_logs/      JSON + TXT logs written by train.py
 model/
-    input_fn.py     data loading, scaling, sequence building
-    model_fn.py     VanillaRNN, LSTMModel, GRUModel, TransformerForecaster
-    training.py     train_step, DirectionalMSELoss (logs every 5 epochs)
-    evaluation.py   MSE, directional accuracy, Sharpe ratio
-    utils.py        helper functions
-saved_models/       .pt weights + scaler.pkl (written by train.py)
-build_dataset.py    fetch & split dataset from Yahoo Finance
-train.py            full training run — all four DL models
-evaluate.py         load saved models and print metrics
-run_demo.py         single-file TA demo script
-search_hyperparams.py   grid search over model / lr / epochs
-synthesize_results.py   aggregate experiment JSONs into a CSV
-main.ipynb          end-to-end interactive notebook
+    input_fn.py         data loading, scaling, sequence building
+    model_fn.py         VanillaRNN, LSTMModel, GRUModel, TransformerForecaster
+    training.py         train_step with ReduceLROnPlateau scheduler
+    evaluation.py       MSE, MAE, directional accuracy, Sharpe ratio
+    utils.py            helper functions
+saved_models/           .pt weights + scaler.pkl (written by train.py)
+build_dataset.py        fetch & split dataset from Yahoo Finance
+train.py                full training run — all four DL models
+evaluate.py             load saved models and print metrics
+run_demo.py             interactive demo script with visualisation
+search_hyperparams.py   grid search over model / lr / epochs / scheduler
+search_lookback.py      experiment: compare look-back window sizes
+search_loss_fn.py       experiment: compare MAE vs MSE training loss
+synthesize_results.py   aggregate experiment JSON files into a CSV
+main.ipynb              end-to-end interactive notebook
 ```
 
 ---
@@ -45,55 +49,33 @@ pip install torch scikit-learn pandas numpy matplotlib statsmodels yfinance
 
 ### 2 — Download the dataset
 
-The full dataset will be downloaded as `wti_crude_daily.csv`.  
-
 ```bash
 python build_dataset.py
 ```
 
-This writes `wti_crude_daily.csv` and splits it into `data/train/`, `data/dev/`, `data/test/`.
+Downloads `wti_crude_daily.csv` (WTI Crude Oil Futures, CL=F, daily OHLCV from 2018-01-01) and splits it into `data/train/`, `data/dev/`, `data/test/`.
 
-### 3 — Run the TA demo (recommended entry point)
+### 3 — Run the demo (recommended entry point)
 
 ```bash
 python run_demo.py
 ```
 
-- Loads saved model weights from `saved_models/` if they exist.  
-- Falls back to training from scratch if weights are missing.  
-- Outputs a metrics table to the terminal and saves `demo_results.png`.
-
-Options:
+Loads saved weights from `saved_models/` if they exist, otherwise trains from scratch. Outputs a metrics table and saves `demo_results.png`.
 
 | Flag | Effect |
 |---|---|
 | `--retrain` | Force fresh training even if weights exist |
-| `--sample`  | Use the 100-row sample CSV instead of the full dataset |
-| `--loss`    | Training loss function: `mse` (default) or `mae` |
+| `--loss mse\|mae` | Training loss function (default: `mse`) |
+
+### 4 — Full training run
 
 ```bash
-python run_demo.py --retrain                  # re-train everything
-python run_demo.py --sample                   # quick smoke-test on sample data
-python run_demo.py --retrain --loss mae       # re-train with MAE loss
+python train.py               # MSE loss (default)
+python train.py --loss mae    # MAE loss
 ```
 
-### 4 — Full training run (saves logs)
-
-```bash
-python train.py
-```
-
-- Trains RNN, LSTM, GRU, Transformer for 50 epochs each.  
-- Logs the training loss every **5 epochs** to the terminal.  
-- Saves `experiments/training_logs/training_log_<timestamp>.json` and a human-readable `summary_<timestamp>.txt`.  
-- Saves model weights to `saved_models/`.
-
-Use `--loss` to switch the training loss function:
-
-```bash
-python train.py               # MSE (default)
-python train.py --loss mae    # MAE
-```
+Trains all four models for 50 epochs, saves weights to `saved_models/`, logs to `experiments/training_logs/`.
 
 ### 5 — Evaluate saved models
 
@@ -101,16 +83,35 @@ python train.py --loss mae    # MAE
 python evaluate.py
 ```
 
-### 6 — Hyperparameter search
+### 6 — Experiments
 
+#### Hyperparameter search
 ```bash
-python search_hyperparams.py                 # MSE (default)
-python search_hyperparams.py --loss mae      # run search with MAE loss
+python search_hyperparams.py                  # train and plot
+python search_hyperparams.py --plot-only      # re-plot from existing results
 ```
+Grid: model × lr × epochs × scheduler on/off.  
+Results → `experiments/hyperparam_search/search_results.json`  
+Plot → `experiments/hyperparam_search/hyperparam_comparison.png`
 
-Results are written to `experiments/hyperparam_search/search_results.json`.
+#### Look-back window comparison
+```bash
+python search_lookback.py                     # train and plot
+python search_lookback.py --plot-only         # re-plot from existing results
+```
+Tests look-back windows of **5, 10, 20, 50** days across all models.  
+Results → `experiments/lookback_search/lookback_results.json`  
+Plot → `experiments/lookback_search/lookback_comparison.png`
 
-### 7 — Aggregate experiment results
+#### MAE vs MSE loss function comparison
+```bash
+python search_loss_fn.py                      # train and print table
+python search_loss_fn.py --results-only       # re-print from existing results
+```
+Trains each model with both MSE and MAE, evaluates with the matching metric plus directional accuracy and Sharpe ratio. Prints two side-by-side tables.  
+Results → `experiments/loss_fn_search/loss_fn_results.json`
+
+### 7 — Aggregate results
 
 ```bash
 python synthesize_results.py
@@ -120,38 +121,31 @@ python synthesize_results.py
 
 ## Models
 
-| Model | Architecture | Parameters |
-|---|---|---|
-| **VanillaRNN** | 2-layer RNN + BatchNorm + Linear | ~18 k |
-| **LSTM** | 2-layer LSTM + BatchNorm + Linear | ~69 k |
-| **GRU** | 2-layer GRU + BatchNorm + Linear | ~52 k |
-| **Transformer** | Input projection + sinusoidal PE + 2× TransformerEncoderLayer (4 heads) + mean-pool + Linear | ~66 k |
-| **ARIMA(5,1,0)** | Walk-forward autoregressive baseline | — |
+| Model | Architecture |
+|---|---|
+| **VanillaRNN** | 2-layer RNN → BatchNorm1d → Linear |
+| **LSTM** | 2-layer LSTM → BatchNorm1d → Linear |
+| **GRU** | 2-layer GRU → BatchNorm1d → Linear |
+| **Transformer** | Linear input projection → sinusoidal PE → 2× decoder layer (8-head causal self-attention + FFN) → last-token readout → Linear |
 
-**Training config (all DL models):**  
-- Optimiser: Adam (`lr=1e-3`)  
-- Loss: MSE (`nn.MSELoss`) — configurable via `--loss {mse,mae}`  
-- Epochs: 50 | Batch size: 64 | Dropout: 0.2  
-- Input: 60-day sliding window of [Open, High, Low, Close, Volume] scaled with `StandardScaler`  
-- Target: next-day Close (scaled)
+**Shared config (all DL models):**
 
----
+| Hyperparameter | Value |
+|---|---|
+| Hidden / d_model size | 64 |
+| Layers | 2 |
+| Dropout | 0.2 |
+| Input features | Open, High, Low, Close, Volume (5) |
+| Look-back window | 10 trading days |
+| Target | Next-day Close (scaled) |
+| Batch size | 64 |
+| Epochs | 50 |
+| Optimiser | Adam (lr = 1e-2) |
+| LR scheduler | `ReduceLROnPlateau` (factor=0.5, patience=5, min_lr=1e-6) — enabled by default |
+| Loss | MSE (default) or MAE via `--loss mae` |
 
-## Results
-
-| Model | MSE (scaled) | Directional Acc. | Sharpe (ann.) |
-|---|---|---|---|
-| RNN | 0.1048 | 52.1% | 0.792 |
-| LSTM | 0.0760 | 53.4% | **0.991** |
-| GRU | 0.0710 | 51.4% | −0.130 |
-| Transformer | 0.0754 | **55.4%** | 0.927 |
-| ARIMA(5,1,0) | **0.0690** | 52.6% | 0.269 |
-
-> These values are from the previous MAE-trained run. Re-run `python train.py` to update with MSE-trained results.
-
-- **MSE:** penalises large prediction errors more heavily than MAE.  
-- **Directional accuracy:** all models sit just above the 50% random baseline; the Transformer edges ahead at 55.4%.  
-- **Sharpe ratio:** LSTM (0.991) and Transformer (0.927) both approach the 1.0 threshold considered attractive in systematic strategies. GRU's negative Sharpe (−0.130) shows that low prediction error does not imply profitable directional calls.
+**Transformer specifics:**  
+Decoder-only (GPT-style) with a causal upper-triangular mask applied at every layer, so each position only attends to itself and earlier steps. A zero-filled prediction slot is appended to the input sequence; the model reads the forecast from that final position.
 
 ---
 
@@ -159,67 +153,43 @@ python synthesize_results.py
 
 | Technique | Where applied |
 |---|---|
-| **StandardScaler** normalisation | `model/input_fn.py` — fitted on train/dev only to prevent data leakage |
-| **Sliding-window sequences** | 60 trading days → predict next-day Close |
-| **Vanishing-gradient mitigation** | LSTM (3 gates) and GRU (2 gates) vs. vanilla RNN |
-| **Multi-head self-attention** | Transformer encoder captures global temporal dependencies simultaneously |
-| **Sinusoidal positional encoding** | Injects chronological order into the attention-based model |
-| **BatchNorm1d** on final hidden state | Stabilises RNN/LSTM/GRU training |
-| **Dropout (0.2)** | Applied in all recurrent layers and the Transformer encoder |
+| **StandardScaler** normalisation | `model/input_fn.py` — fitted on train data only to prevent leakage |
+| **Sliding-window sequences** | 10-day window → predict next-day Close |
+| **Causal (masked) self-attention** | Transformer decoder layer — no future leakage |
+| **Sinusoidal positional encoding** | Injects chronological order into Transformer input |
+| **Zero-filled prediction slot** | Appended to Transformer input; forecast read from last token |
+| **BatchNorm1d** on final hidden state | Stabilises RNN / LSTM / GRU training |
+| **Dropout (0.2)** | All recurrent layers and Transformer encoder layers |
 | **Adam optimiser** | Adaptive learning-rate optimisation |
-| **MSE loss** | Penalises large errors more heavily than MAE; default training objective (`--loss mse`) |
+| **ReduceLROnPlateau** | Halves LR after 5 epochs without improvement; floor 1e-6 |
+| **MSE loss** | Default training objective; penalises large errors more heavily |
 | **MAE loss** | Robust to outliers; selectable via `--loss mae` |
-| **Directional penalty loss** | Custom `DirectionalMSELoss`: multiplies wrong-direction squared errors by `(1 + α)` |
-| **Walk-forward ARIMA** | Classical linear baseline; refitted at every test step to avoid look-ahead bias |
-| **Directional accuracy** | % of days where predicted direction matches actual (random = 50%) |
-| **Annualised Sharpe ratio** | Risk-adjusted return of a long/short strategy driven by model direction calls |
-
----
-
-## Overleaf Report
-
-The LaTeX source lives in `report/main.tex`.
-All figures are pre-generated PDFs in `report/figures/`.
-
-### Uploading to Overleaf
-
-1. **Generate figures** (skip if already done):
-   ```bash
-   python generate_figures.py
-   ```
-2. **Zip the report folder:**
-   ```bash
-   zip -r report.zip report/
-   ```
-3. On [overleaf.com](https://www.overleaf.com):
-   - Click **New Project → Upload Project**.
-   - Upload `report.zip`.
-   - Set the main document to `main.tex`.
-   - Click **Recompile** — the paper will build immediately.
-
-> To refresh figures after retraining, re-run `python generate_figures.py`
-> and re-upload `report/figures/` via Overleaf's file manager.
-
----
-
-
-
-1. All models learn a **persistence-like strategy** under plain MSE loss — the near-random-walk nature of crude oil futures means "predict ≈ yesterday's price" already minimises average error.  
-2. The **Transformer's global attention** gives it a small but consistent directional edge (55.4%) over recurrent architectures.  
-3. The **directional penalty loss** (`α=10`) successfully shifts models away from pure persistence toward directional correctness.  
-4. The gap between MSE rankings and Sharpe rankings confirms that financial forecasting requires **multiple evaluation metrics**.
+| **DirectionalMSELoss** | Custom loss: multiplies wrong-direction squared errors by `(1 + α=10)` |
+| **Walk-forward ARIMA** | Classical linear baseline; refitted at every test step |
+| **Directional accuracy** | % of days where predicted direction matches actual (random baseline = 50%) |
+| **Annualised Sharpe ratio** | Risk-adjusted return of a long/short strategy driven by model signals |
 
 ---
 
 ## Dataset
 
-`wti_crude_daily.csv` — 2,091 rows, daily OHLCV for WTI Crude Oil Futures (CL=F) from 2018-01-01 fetched via `yfinance`.  
-A 100-row sample is available at `data/test/sample_test_data.csv`.
+`wti_crude_daily.csv` — daily OHLCV for WTI Crude Oil Futures (CL=F) from 2018-01-01, fetched via `yfinance`.
 
 **Chronological split (no shuffling):**
 
-| Split | Rows | Purpose |
+| Split | Proportion | Purpose |
 |---|---|---|
-| Train (80%) | ~1,368 | Model training |
-| Dev  (20%) | ~342 | Hyperparameter tuning |
-| Animation | last 30 | Visual demo only |
+| Train | 80% | Model training |
+| Dev | 20% | Hyperparameter tuning |
+| Animation / test | last 30 rows | Visual demo only |
+
+---
+
+## Overleaf Report
+
+LaTeX source: `report/main.tex`. Figures: `report/figures/`.
+
+```bash
+python generate_figures.py   # regenerate all figures
+zip -r report.zip report/    # zip for Overleaf upload
+```

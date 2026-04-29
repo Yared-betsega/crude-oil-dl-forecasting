@@ -70,27 +70,48 @@ class PositionalEncoding(nn.Module):
 
 
 class TransformerForecaster(nn.Module):
-    def __init__(self, input_size=5, d_model=64, n_heads=4,
-                 num_encoder_layers=2, dim_feedforward=128, dropout=0.2):
+    """Decoder-only Transformer (GPT-style).
+
+    Architecture:
+      Input → Linear embedding → Sinusoidal PE
+        → N × [Masked Multi-Head Self-Attention → Add & Norm
+               → Feed-Forward Network          → Add & Norm]
+        → last-token readout → Dense → scalar prediction
+
+    A zero-filled prediction slot is appended to the input sequence so
+    the model produces the forecast at the final (T+1-th) position while
+    maintaining the causal / autoregressive property throughout.
+    """
+
+    def __init__(self, input_size=INPUT_SIZE, d_model=64, n_heads=8,
+                 num_layers=2, dim_feedforward=128, dropout=0.2):
         super().__init__()
         self.input_proj = nn.Linear(input_size, d_model)
         self.pos_enc    = PositionalEncoding(d_model, dropout=dropout)
-        encoder_layer   = nn.TransformerEncoderLayer(
+        decoder_layer = nn.TransformerEncoderLayer(
             d_model=d_model,
             nhead=n_heads,
             dim_feedforward=dim_feedforward,
             dropout=dropout,
             batch_first=True,
         )
-        self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_encoder_layers)
+        self.decoder_stack = nn.TransformerEncoder(decoder_layer, num_layers=num_layers)
         self.fc = nn.Linear(d_model, 1)
 
     def forward(self, x):
-        x = self.input_proj(x)
+        # Append zero-filled prediction slot: (B, T) -> (B, T+1)
+        pred_slot = torch.zeros(x.size(0), 1, x.size(2), device=x.device, dtype=x.dtype)
+        x = torch.cat([x, pred_slot], dim=1)            # (B, T+1, input_size)
+
+        x = self.input_proj(x)                          # (B, T+1, d_model)
         x = self.pos_enc(x)
-        x = self.encoder(x)
-        x = x.mean(dim=1)
-        return self.fc(x)
+
+        # Causal mask: each position may only attend to itself and prior positions
+        T = x.size(1)
+        causal_mask = nn.Transformer.generate_square_subsequent_mask(T, device=x.device)
+
+        x = self.decoder_stack(x, mask=causal_mask)     # (B, T+1, d_model)
+        return self.fc(x[:, -1, :])                     # forecast from last token
 
 
 MODEL_REGISTRY = {

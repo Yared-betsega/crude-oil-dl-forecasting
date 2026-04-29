@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 import torch.nn as nn
-from sklearn.metrics import mean_squared_error
+from sklearn.metrics import mean_squared_error, mean_absolute_error
 
 from model.utils import directional_accuracy, sharpe_ratio
 
@@ -19,17 +19,19 @@ def evaluate_model(model: nn.Module, X_t: torch.Tensor,
 def full_eval(model: nn.Module, X_t: torch.Tensor, y_t: torch.Tensor,
               X_raw: np.ndarray, scaler, target_col: int = 3):
     mse, preds, actual = evaluate_model(model, X_t, y_t)
+    mae  = mean_absolute_error(actual, preds)
 
     prev = X_raw[:, -1, target_col]
     da   = directional_accuracy(preds, actual, prev)
     sr   = sharpe_ratio(preds, prev, actual, scaler)
 
     return {
-        "mse":    mse,
+        "mse":     mse,
+        "mae":     mae,
         "dir_acc": da,
-        "sharpe": sr,
-        "preds":  preds,
-        "actual": actual,
+        "sharpe":  sr,
+        "preds":   preds,
+        "actual":  actual,
     }
 
 

@@ -4,7 +4,7 @@ import torch
 from torch.utils.data import DataLoader, TensorDataset
 from sklearn.preprocessing import StandardScaler
 
-LOOK_BACK        = 60
+LOOK_BACK        = 10
 TARGET_COL       = 3    # index of Close in [Open, High, Low, Close, Volume]
 N_ANIMATION_DAYS = 30
 BATCH_SIZE       = 64

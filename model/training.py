@@ -4,7 +4,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 
 EPOCHS     = 50
-LR         = 1e-3
+LR         = 1e-2
 ALPHA      = 10
 
 LOSS_CHOICES = ("mse", "mae")
@@ -35,10 +35,17 @@ class DirectionalMSELoss(nn.Module):
 
 def train_step(model: nn.Module, loader: DataLoader,
                epochs: int = EPOCHS, lr: float = LR,
-               loss: str = "mse", verbose: bool = True) -> list:
+               loss: str = "mse", verbose: bool = True,
+               use_scheduler: bool = True) -> list:
     criterion = get_criterion(loss)
     log_key   = f"train_{loss.lower()}"
     optimizer = optim.Adam(model.parameters(), lr=lr)
+    scheduler = (
+        optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer, mode="min", factor=0.5, patience=5, min_lr=1e-6
+        )
+        if use_scheduler else None
+    )
     history   = []
     model.train()
     for epoch in range(1, epochs + 1):
@@ -50,17 +57,29 @@ def train_step(model: nn.Module, loader: DataLoader,
             optimizer.step()
             running += batch_loss.item() * len(xb)
         epoch_loss = running / len(loader.dataset)
-        history.append({"epoch": epoch, log_key: round(epoch_loss, 6)})
+        if scheduler is not None:
+            scheduler.step(epoch_loss)
+        current_lr = optimizer.param_groups[0]["lr"]
+        history.append({"epoch": epoch, log_key: round(epoch_loss, 6),
+                        "lr": current_lr})
         if verbose and epoch % 5 == 0:
-            print(f"  epoch {epoch:3d}/{epochs}  train {loss.upper()}: {epoch_loss:.4f}")
+            print(f"  epoch {epoch:3d}/{epochs}  train {loss.upper()}: {epoch_loss:.4f}"
+                  f"  lr: {current_lr:.2e}")
     return history
 
 
 def train_step_directional(model: nn.Module, loader: DataLoader,
                             alpha: float = ALPHA, epochs: int = EPOCHS,
-                            lr: float = LR, verbose: bool = True) -> list:
+                            lr: float = LR, verbose: bool = True,
+                            use_scheduler: bool = True) -> list:
     criterion = DirectionalMSELoss(alpha=alpha)
     optimizer = optim.Adam(model.parameters(), lr=lr)
+    scheduler = (
+        optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer, mode="min", factor=0.5, patience=5, min_lr=1e-6
+        )
+        if use_scheduler else None
+    )
     history   = []
     model.train()
     for epoch in range(1, epochs + 1):
@@ -72,7 +91,12 @@ def train_step_directional(model: nn.Module, loader: DataLoader,
             optimizer.step()
             running += loss.item() * len(xb)
         epoch_loss = running / len(loader.dataset)
-        history.append({"epoch": epoch, "dir_loss": round(epoch_loss, 6)})
+        if scheduler is not None:
+            scheduler.step(epoch_loss)
+        current_lr = optimizer.param_groups[0]["lr"]
+        history.append({"epoch": epoch, "dir_loss": round(epoch_loss, 6),
+                        "lr": current_lr})
         if verbose and epoch % 5 == 0:
-            print(f"  epoch {epoch:3d}/{epochs}  dir-loss: {epoch_loss:.4f}")
+            print(f"  epoch {epoch:3d}/{epochs}  dir-loss: {epoch_loss:.4f}"
+                  f"  lr: {current_lr:.2e}")
     return history
