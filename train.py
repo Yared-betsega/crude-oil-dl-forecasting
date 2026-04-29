@@ -22,6 +22,8 @@ def main():
     parser = argparse.ArgumentParser(description="Full training run")
     parser.add_argument("--loss", default="mse", choices=LOSS_CHOICES,
                         help="Training loss function (default: mse)")
+    parser.add_argument("--no-scheduler", action="store_true",
+                        help="Disable ReduceLROnPlateau (use fixed learning rate)")
     args = parser.parse_args()
 
     data = get_data_loaders(CSV_PATH)
@@ -42,7 +44,8 @@ def main():
         print(f"  Training {name}")
         print("=" * 45)
         model   = build_model(name)
-        history = train_step(model, train_loader, loss=args.loss)
+        history = train_step(model, train_loader, loss=args.loss,
+                             use_scheduler=not args.no_scheduler)
         metrics = full_eval(model, X_test_t, y_test_t, X_test_raw, scaler, TARGET_COL)
         metrics["model"] = model
         results[name]    = metrics

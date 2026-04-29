@@ -67,12 +67,15 @@ Loads saved weights from `saved_models/` if they exist, otherwise trains from sc
 |---|---|
 | `--retrain` | Force fresh training even if weights exist |
 | `--loss mse\|mae` | Training loss function (default: `mse`) |
+| `--no-scheduler` | Disable `ReduceLROnPlateau` and use a fixed learning rate |
 
 ### 4 — Full training run
 
 ```bash
-python train.py               # MSE loss (default)
-python train.py --loss mae    # MAE loss
+python train.py                            # MSE loss, adaptive LR (defaults)
+python train.py --loss mae                 # MAE loss
+python train.py --no-scheduler             # fixed learning rate
+python train.py --loss mae --no-scheduler  # MAE + fixed LR
 ```
 
 Trains all four models for 50 epochs, saves weights to `saved_models/`, logs to `experiments/training_logs/`.
@@ -180,8 +183,7 @@ Decoder-only (GPT-style) with a causal upper-triangular mask applied at every la
 | Split | Proportion | Purpose |
 |---|---|---|
 | Train | 80% | Model training |
-| Dev | 20% | Hyperparameter tuning |
-| Animation / test | last 30 rows | Visual demo only |
+| Test  | 20% | Evaluation |
 
 ---
 

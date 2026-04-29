@@ -40,7 +40,8 @@ FULL_CSV   = "wti_crude_daily.csv"
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
-def load_or_train(data: dict, retrain: bool, loss: str = "mse") -> dict:
+def load_or_train(data: dict, retrain: bool, loss: str = "mse",
+                  use_scheduler: bool = True) -> dict:
     """Return dict of {name: nn.Module}, loading from disk or training fresh."""
     models = {}
     scaler       = data["scaler"]
@@ -57,7 +58,7 @@ def load_or_train(data: dict, retrain: bool, loss: str = "mse") -> dict:
             print(f"  Loaded  {name:12s} ← {path}")
         else:
             print(f"\n  Training {name} …")
-            train_step(model, train_loader, loss=loss, verbose=True)
+            train_step(model, train_loader, loss=loss, use_scheduler=use_scheduler, verbose=True)
             os.makedirs(MODELS_DIR, exist_ok=True)
             torch.save(model.state_dict(), path)
             print(f"  Saved   {name:12s} → {path}")
@@ -132,6 +133,8 @@ def main():
                         help="Use the 100-row sample dataset instead of the full CSV")
     parser.add_argument("--loss", default="mse", choices=LOSS_CHOICES,
                         help="Training loss function (default: mse)")
+    parser.add_argument("--no-scheduler", action="store_true",
+                        help="Disable ReduceLROnPlateau (use fixed learning rate)")
     args = parser.parse_args()
 
     csv_path = SAMPLE_CSV if args.sample else FULL_CSV
@@ -150,7 +153,8 @@ def main():
     data = get_data_loaders(csv_path)
 
     print("\n── Deep-learning models ─────────────────────────────────────────")
-    models  = load_or_train(data, retrain=args.retrain, loss=args.loss)
+    models  = load_or_train(data, retrain=args.retrain, loss=args.loss,
+                            use_scheduler=not args.no_scheduler)
 
     results = {}
     for name, model in models.items():

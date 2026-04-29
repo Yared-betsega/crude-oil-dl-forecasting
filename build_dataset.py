@@ -4,11 +4,10 @@ import pandas as pd
 import numpy as np
 from sklearn.preprocessing import StandardScaler
 
-TICKER           = "CL=F"
-START            = "2018-01-01"
-LOOK_BACK        = 60
-N_ANIMATION_DAYS = 30
-TARGET_COL       = 3    # Close
+TICKER     = "CL=F"
+START      = "2018-01-01"
+LOOK_BACK  = 60
+TARGET_COL = 3    # Close
 
 DATA_DIR   = "data"
 TRAIN_DIR  = os.path.join(DATA_DIR, "train")
@@ -30,18 +29,14 @@ def fetch_raw() -> pd.DataFrame:
 
 
 def split_and_save(df: pd.DataFrame):
-    test_data  = df.iloc[-N_ANIMATION_DAYS:]
-    rest       = df.iloc[:-N_ANIMATION_DAYS]
-    split      = int(len(rest) * 0.8)
-    train_data = rest.iloc[:split]
-    dev_data   = rest.iloc[split:]
+    split      = int(len(df) * 0.8)
+    train_data = df.iloc[:split]
+    test_data  = df.iloc[split:]
 
     train_data.to_csv(os.path.join(TRAIN_DIR, "train.csv"))
-    dev_data.to_csv(os.path.join(DEV_DIR,   "dev.csv"))
-    test_data.to_csv(os.path.join(TEST_DIR,  "test.csv"))
+    test_data.to_csv(os.path.join(TEST_DIR,   "test.csv"))
 
     print(f"train : {len(train_data)} rows  → {TRAIN_DIR}/train.csv")
-    print(f"dev   : {len(dev_data)}  rows  → {DEV_DIR}/dev.csv")
     print(f"test  : {len(test_data)} rows  → {TEST_DIR}/test.csv")
 
 

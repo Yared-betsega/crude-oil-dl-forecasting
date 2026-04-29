@@ -4,7 +4,8 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 
 EPOCHS     = 50
-LR         = 1e-2
+LR         = 1e-2   # default lr when using ReduceLROnPlateau scheduler
+LR_FIXED   = 1e-3   # default lr when scheduler is disabled
 ALPHA      = 10
 
 LOSS_CHOICES = ("mse", "mae")
@@ -34,9 +35,11 @@ class DirectionalMSELoss(nn.Module):
 
 
 def train_step(model: nn.Module, loader: DataLoader,
-               epochs: int = EPOCHS, lr: float = LR,
+               epochs: int = EPOCHS, lr: float = None,
                loss: str = "mse", verbose: bool = True,
                use_scheduler: bool = True) -> list:
+    if lr is None:
+        lr = LR if use_scheduler else LR_FIXED
     criterion = get_criterion(loss)
     log_key   = f"train_{loss.lower()}"
     optimizer = optim.Adam(model.parameters(), lr=lr)
@@ -70,8 +73,10 @@ def train_step(model: nn.Module, loader: DataLoader,
 
 def train_step_directional(model: nn.Module, loader: DataLoader,
                             alpha: float = ALPHA, epochs: int = EPOCHS,
-                            lr: float = LR, verbose: bool = True,
+                            lr: float = None, verbose: bool = True,
                             use_scheduler: bool = True) -> list:
+    if lr is None:
+        lr = LR if use_scheduler else LR_FIXED
     criterion = DirectionalMSELoss(alpha=alpha)
     optimizer = optim.Adam(model.parameters(), lr=lr)
     scheduler = (
