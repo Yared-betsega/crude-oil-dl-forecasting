@@ -16,6 +16,7 @@ import torch
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 from sklearn.metrics import mean_squared_error
 from statsmodels.tsa.arima.model import ARIMA
 
@@ -277,6 +278,121 @@ def fig_training_loss():
 
 # ── main ─────────────────────────────────────────────────────────────────────
 
+def fig_param_counts():
+    """Bar chart of trainable parameter counts."""
+    names  = ["RNN", "LSTM", "GRU", "Transformer"]
+    counts = [13_057, 51_649, 38_785, 67_393]
+    colors = [BAR_COLORS[n] for n in names]
+
+    fig, ax = plt.subplots(figsize=(7, 4))
+    bars = ax.bar(names, counts, color=colors, alpha=0.85, edgecolor="black")
+    for bar, v in zip(bars, counts):
+        ax.text(bar.get_x() + bar.get_width() / 2, v + 400,
+                f"{v:,}", ha="center", va="bottom", fontsize=9)
+    ax.set_ylabel("Trainable Parameters")
+    ax.set_title("Model Parameter Counts")
+    ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{int(x):,}"))
+    fig.tight_layout()
+    path = os.path.join(FIG_DIR, "fig_param_counts.pdf")
+    fig.savefig(path)
+    plt.close(fig)
+    print(f"Saved {path}")
+
+
+def fig_transformer_arch():
+    """Text-diagram of the decoder-only Transformer pipeline."""
+    fig, ax = plt.subplots(figsize=(7, 8))
+    ax.set_xlim(0, 10)
+    ax.set_ylim(0, 14)
+    ax.axis("off")
+
+    blocks = [
+        (5, 13.0, "Input sequence  (B × 60 × 5)", "#f9e79f"),
+        (5, 11.5, "Linear projection  5 → 64", "#aed6f1"),
+        (5, 10.0, "Sinusoidal Positional Encoding", "#aed6f1"),
+        (5,  8.5, "Append zero prediction slot  → (B × 61 × 64)", "#d5f5e3"),
+        (5,  7.0, "Masked Multi-Head Self-Attention\n(8 heads, causal mask)", "#f1948a"),
+        (5,  5.5, "Add & Norm", "#fadbd8"),
+        (5,  4.0, "Feed-Forward Network  (64 → 128 → 64)", "#f1948a"),
+        (5,  2.5, "Add & Norm", "#fadbd8"),
+        (5,  1.2, "Last token readout → Linear 64 → 1", "#a9cce3"),
+        (5,  0.0, "Predicted Close price", "#f9e79f"),
+    ]
+
+    for x, y, label, color in blocks:
+        ax.add_patch(mpatches.FancyBboxPatch(
+            (x - 3.5, y - 0.38), 7, 0.76,
+            boxstyle="round,pad=0.05", facecolor=color, edgecolor="black", linewidth=0.8,
+        ))
+        ax.text(x, y, label, ha="center", va="center", fontsize=8.5)
+
+    for i in range(len(blocks) - 1):
+        y_top = blocks[i + 1][1] + 0.38
+        y_bot = blocks[i][1] - 0.38
+        ax.annotate("", xy=(5, y_top), xytext=(5, y_bot),
+                    arrowprops=dict(arrowstyle="->", color="black", lw=0.9))
+
+    # bracket indicating repeated N=2 times
+    ax.annotate("", xy=(8.8, 4.88), xytext=(8.8, 6.12),
+                arrowprops=dict(arrowstyle="-", color="gray", lw=1.5,
+                                connectionstyle="bar,fraction=0.3"))
+    ax.text(9.35, 5.5, "×2", ha="center", va="center", fontsize=9, color="gray")
+
+    ax.set_title("Decoder-only Transformer Architecture", fontsize=11, fontweight="bold", pad=6)
+    fig.tight_layout()
+    path = os.path.join(FIG_DIR, "fig_transformer_arch.pdf")
+    fig.savefig(path)
+    plt.close(fig)
+    print(f"Saved {path}")
+
+
+# ── figure 10: MSE vs MAE loss function comparison ───────────────────────────
+
+def fig_loss_comparison():
+    """Grouped bar chart comparing MSE vs MAE training loss across all models."""
+    import json
+    json_path = os.path.join("experiments", "loss_comparison", "loss_results.json")
+    with open(json_path) as f:
+        rows = json.load(f)
+
+    models = ["RNN", "LSTM", "GRU", "Transformer"]
+    metrics = [("mse", "Test MSE"), ("mae", "Test MAE"),
+               ("dir_acc", "Dir. Accuracy"), ("sharpe", "Sharpe Ratio")]
+
+    fig, axes = plt.subplots(1, 4, figsize=(14, 4))
+    fig.suptitle("Effect of Training Loss Function (MSE vs MAE)", fontsize=12, fontweight="bold")
+
+    x         = np.arange(len(models))
+    width     = 0.35
+    mse_color = "#4C72B0"
+    mae_color = "#DD8452"
+
+    for ax, (metric, label) in zip(axes, metrics):
+        vals_mse = [next(r[metric] for r in rows if r["model"] == m and r["loss"] == "MSE")
+                    for m in models]
+        vals_mae = [next(r[metric] for r in rows if r["model"] == m and r["loss"] == "MAE")
+                    for m in models]
+
+        b1 = ax.bar(x - width / 2, vals_mse, width, label="MSE loss",
+                    color=mse_color, alpha=0.85, edgecolor="black")
+        b2 = ax.bar(x + width / 2, vals_mae, width, label="MAE loss",
+                    color=mae_color, alpha=0.85, edgecolor="black")
+
+        ax.set_title(label, fontsize=10)
+        ax.set_xticks(x)
+        ax.set_xticklabels(models, rotation=15, ha="right", fontsize=8)
+        if metric in ("dir_acc",):
+            ax.yaxis.set_major_formatter(
+                plt.FuncFormatter(lambda v, _: f"{v*100:.0f}%"))
+        ax.legend(fontsize=7)
+
+    fig.tight_layout()
+    path = os.path.join(FIG_DIR, "fig_loss_comparison.pdf")
+    fig.savefig(path)
+    plt.close(fig)
+    print(f"Saved {path}")
+
+
 if __name__ == "__main__":
     print("Generating figures …\n")
     results, actual_arr, test_series, data = load_all()
@@ -287,6 +403,9 @@ if __name__ == "__main__":
     fig_sharpe(results)
     fig_combined(results)
     fig_training_loss()
+    fig_param_counts()
+    fig_transformer_arch()
+    fig_loss_comparison()
 
     print(f"\nAll figures saved to {FIG_DIR}/")
     print("Upload the entire report/ folder to Overleaf.")

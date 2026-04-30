@@ -5,7 +5,7 @@ import numpy as np
 from sklearn.preprocessing import StandardScaler
 
 TICKER     = "CL=F"
-START      = "2018-01-01"
+START      = "2016-01-01"
 LOOK_BACK  = 60
 TARGET_COL = 3    # Close
 

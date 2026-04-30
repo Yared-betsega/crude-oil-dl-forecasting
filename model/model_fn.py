@@ -126,3 +126,23 @@ def build_model(name: str) -> nn.Module:
     if name not in MODEL_REGISTRY:
         raise ValueError(f"Unknown model '{name}'. Choose from {list(MODEL_REGISTRY)}")
     return MODEL_REGISTRY[name]()
+
+
+def print_model_parameters(model: nn.Module = None) -> None:
+    """Print trainable parameter counts for all models (or a single model)."""
+    if model is not None:
+        total = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        print(f"{model.__class__.__name__}: {total:,} trainable parameters")
+        return
+
+    print(f"{'Model':<16} {'Parameters':>12}")
+    print("-" * 30)
+    for name, cls in MODEL_REGISTRY.items():
+        m = cls()
+        total = sum(p.numel() for p in m.parameters() if p.requires_grad)
+        print(f"{name:<16} {total:>12,}")
+
+
+if __name__ == "__main__":
+    print_model_parameters()
+
