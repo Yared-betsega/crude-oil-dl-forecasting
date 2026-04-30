@@ -1,0 +1,66 @@
+[
+  {
+    "model": "RNN",
+    "loss": "MSE",
+    "mse": 0.0192,
+    "mae": 0.0975,
+    "dir_acc": 0.5158,
+    "sharpe": 0.9071
+  },
+  {
+    "model": "RNN",
+    "loss": "MAE",
+    "mse": 0.0164,
+    "mae": 0.0832,
+    "dir_acc": 0.4881,
+    "sharpe": 0.2809
+  },
+  {
+    "model": "LSTM",
+    "loss": "MSE",
+    "mse": 0.0183,
+    "mae": 0.0939,
+    "dir_acc": 0.5138,
+    "sharpe": 0.2873
+  },
+  {
+    "model": "LSTM",
+    "loss": "MAE",
+    "mse": 0.0172,
+    "mae": 0.0859,
+    "dir_acc": 0.5119,
+    "sharpe": 0.3728
+  },
+  {
+    "model": "GRU",
+    "loss": "MSE",
+    "mse": 0.0159,
+    "mae": 0.0772,
+    "dir_acc": 0.5336,
+    "sharpe": 0.784
+  },
+  {
+    "model": "GRU",
+    "loss": "MAE",
+    "mse": 0.0203,
+    "mae": 0.1005,
+    "dir_acc": 0.4941,
+    "sharpe": -0.2342
+  },
+  {
+    "model": "Transformer",
+    "loss": "MSE",
+    "mse": 0.0218,
+    "mae": 0.0981,
+    "dir_acc": 0.5455,
+    "sharpe": 1.0391
+  },
+  {
+    "model": "Transformer",
+    "loss": "MAE",
+    "mse": 0.0321,
+    "mae": 0.1468,
+    "dir_acc": 0.5217,
+    "sharpe": 1.3081
+  }
+]

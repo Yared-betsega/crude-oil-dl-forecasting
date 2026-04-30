@@ -1,0 +1,82 @@
+[
+  {
+    "loss_fn": "mse",
+    "model": "RNN",
+    "train_mae": 0.124156,
+    "train_mse": 0.03292,
+    "test_mae": 0.138475,
+    "test_mse": 0.045766,
+    "dir_acc": 0.5415,
+    "sharpe": 0.5916
+  },
+  {
+    "loss_fn": "mse",
+    "model": "LSTM",
+    "train_mae": 0.066677,
+    "train_mse": 0.012028,
+    "test_mae": 0.0846,
+    "test_mse": 0.017205,
+    "dir_acc": 0.5237,
+    "sharpe": 1.1992
+  },
+  {
+    "loss_fn": "mse",
+    "model": "GRU",
+    "train_mae": 0.064219,
+    "train_mse": 0.011735,
+    "test_mae": 0.096216,
+    "test_mse": 0.019821,
+    "dir_acc": 0.5296,
+    "sharpe": 0.9811
+  },
+  {
+    "loss_fn": "mse",
+    "model": "Transformer",
+    "train_mae": 0.127016,
+    "train_mse": 0.033546,
+    "test_mae": 0.12371,
+    "test_mse": 0.037301,
+    "dir_acc": 0.5178,
+    "sharpe": 0.3631
+  },
+  {
+    "loss_fn": "mae",
+    "model": "RNN",
+    "train_mae": 0.086475,
+    "train_mse": 0.019368,
+    "test_mae": 0.087737,
+    "test_mse": 0.019247,
+    "dir_acc": 0.5277,
+    "sharpe": 0.0041
+  },
+  {
+    "loss_fn": "mae",
+    "model": "LSTM",
+    "train_mae": 0.067396,
+    "train_mse": 0.014406,
+    "test_mae": 0.08026,
+    "test_mse": 0.017254,
+    "dir_acc": 0.4802,
+    "sharpe": -1.0084
+  },
+  {
+    "loss_fn": "mae",
+    "model": "GRU",
+    "train_mae": 0.080869,
+    "train_mse": 0.018942,
+    "test_mae": 0.0986,
+    "test_mse": 0.021367,
+    "dir_acc": 0.5059,
+    "sharpe": 0.3229
+  },
+  {
+    "loss_fn": "mae",
+    "model": "Transformer",
+    "train_mae": 0.100258,
+    "train_mse": 0.025869,
+    "test_mae": 0.130865,
+    "test_mse": 0.034645,
+    "dir_acc": 0.498,
+    "sharpe": -0.7154
+  }
+]
